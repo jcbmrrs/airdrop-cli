@@ -65,3 +65,19 @@ airdrop https://apple.com/
 
 You can pass as many paths as you want. As long as theese file URLs are correct,
 the command will work.
+
+### Device Discovery (Experimental)
+
+⚠️ **API Limitation**: Apple's NSSharingService does not provide APIs for device discovery or selection.
+
+You can try listing devices:
+```
+airdrop --list-devices
+```
+
+Or specify a preferred device:
+```
+airdrop --device "iPhone" file.txt
+```
+
+However, the system AirDrop picker will still open for manual selection due to API constraints. These flags are provided to document the limitation and guide users to the correct workflow.

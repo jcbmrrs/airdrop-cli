@@ -34,8 +34,30 @@ class ConsoleIO {
         writeMessage("    \(executableName) image1.jpg image2.png")
         writeMessage("    \(executableName) file.txt https://apple.com/")
         writeMessage("    find . -name '*.pdf' | \(executableName) -")
+        writeMessage("    \(executableName) --device \"iPhone\" document.pdf")
         writeMessage("\nOPTIONS:")
         writeMessage("    -h, --help – print help info")
+        writeMessage("    -l, --list-devices – show available AirDrop devices (API limited)")
+        writeMessage("    -d, --device <name> – specify target device (not fully supported)")
         writeMessage("    - – read file paths from stdin")
+        writeMessage("\nNOTE:")
+        writeMessage("    Device discovery and selection are limited by Apple's NSSharingService API.")
+        writeMessage("    The system picker UI will always appear for final device selection.")
+    }
+
+    func printAPILimitation() {
+        writeMessage("⚠️  This feature is limited by Apple's APIs", to: .error)
+        writeMessage("NSSharingService does not expose device discovery or selection.", to: .error)
+    }
+
+    func printDeviceList(_ devices: [String]) {
+        writeMessage("\nAvailable AirDrop Devices:")
+        if devices.isEmpty {
+            writeMessage("  (API cannot discover devices)")
+        } else {
+            for (index, device) in devices.enumerated() {
+                writeMessage("  \(index + 1). \(device)")
+            }
+        }
     }
 }

@@ -11,11 +11,15 @@ import Cocoa
 
 enum OptionType: String {
     case help = "h"
+    case listDevices = "l"
+    case device = "d"
     case unknown
 
     init(value: String) {
         switch value {
         case "-h", "--help": self = .help
+        case "-l", "--list-devices": self = .listDevices
+        case "-d", "--device": self = .device
         default: self = .unknown
         }
     }
@@ -28,34 +32,51 @@ class AirDropCLI:  NSObject, NSApplicationDelegate, NSSharingServiceDelegate {
     private var individualSharingSuccessful = 0
     private var individualSharingFailed = 0
     private var sharingStartTime: Date?
+    private var targetDeviceName: String?
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         let argCount = Int(CommandLine.argc)
 
         if argCount >= 2 {
             let argument = CommandLine.arguments[1]
-            if argCount == 2 && argument.hasPrefix("-") {
-                if argument == "-" {
-                    // Process stdin
-                    let stdinPaths = readPathsFromStdin()
-                    if stdinPaths.isEmpty {
-                        consoleIO.printUsage()
-                        exit(0)
-                    }
-                    shareFiles(stdinPaths)
-                } else {
-                    let (option, _) = getOption(argument)
+            if argument.hasPrefix("-") && argument != "-" {
+                let (option, _) = getOption(argument)
 
-                    if option == .help {
-                        consoleIO.printUsage()
-                    } else {
-                        consoleIO.writeMessage("Unknown option, see usage.\n", to: .error)
-                        consoleIO.printUsage()
-                    }
+                switch option {
+                case .help:
+                    consoleIO.printUsage()
+                    exit(0)
 
+                case .listDevices:
+                    listAvailableDevices()
+                    exit(0)
+
+                case .device:
+                    // --device requires a device name and file paths
+                    if argCount < 4 {
+                        consoleIO.writeMessage("Error: --device requires a device name and at least one file", to: .error)
+                        consoleIO.printUsage()
+                        exit(3)
+                    }
+                    targetDeviceName = CommandLine.arguments[2]
+                    let pathsToFiles = Array(CommandLine.arguments[3 ..< argCount])
+                    shareFiles(pathsToFiles)
+
+                case .unknown:
+                    consoleIO.writeMessage("Unknown option, see usage.\n", to: .error)
+                    consoleIO.printUsage()
                     exit(0)
                 }
+            } else if argument == "-" {
+                // Process stdin
+                let stdinPaths = readPathsFromStdin()
+                if stdinPaths.isEmpty {
+                    consoleIO.printUsage()
+                    exit(0)
+                }
+                shareFiles(stdinPaths)
             } else {
+                // Regular file paths (no flags)
                 let pathsToFiles = Array(CommandLine.arguments[1 ..< argCount])
                 shareFiles(pathsToFiles)
             }
@@ -74,6 +95,14 @@ class AirDropCLI:  NSObject, NSApplicationDelegate, NSSharingServiceDelegate {
     }
 
     func shareFiles(_ pathsToFiles: [String]) {
+        // Check if device was specified via --device flag
+        if let deviceName = targetDeviceName {
+            consoleIO.writeMessage("⚠️  Device selection requested: '\(deviceName)'")
+            consoleIO.writeMessage("Note: NSSharingService does not support programmatic recipient selection.")
+            consoleIO.writeMessage("The system picker will open - please select '\(deviceName)' manually.")
+            consoleIO.writeMessage("")
+        }
+
         guard let service: NSSharingService = NSSharingService(named: .sendViaAirDrop)
         else {
             exit(2)
@@ -212,14 +241,47 @@ class AirDropCLI:  NSObject, NSApplicationDelegate, NSSharingServiceDelegate {
 
     private func readPathsFromStdin() -> [String] {
         var paths: [String] = []
-        
+
         while let line = readLine() {
             let trimmedLine = line.trimmingCharacters(in: .whitespacesAndNewlines)
             if !trimmedLine.isEmpty {
                 paths.append(trimmedLine)
             }
         }
-        
+
         return paths
+    }
+
+    // MARK: - Device Discovery
+
+    /// Attempts to list available AirDrop devices.
+    ///
+    /// Research findings: Apple's NSSharingService does NOT provide public APIs for:
+    /// - Listing available AirDrop recipients
+    /// - Programmatically selecting specific devices
+    /// - Querying device discovery status
+    ///
+    /// Alternative approaches investigated:
+    /// - NetServiceBrowser: Only discovers Bonjour services (_airplay._tcp), not AirDrop
+    /// - Network.framework: No public API for AWDL (Apple Wireless Direct Link) peer enumeration
+    /// - MultipeerConnectivity: Requires both ends to use the framework, won't see standard AirDrop devices
+    /// - Private frameworks: Exist but not suitable for public distribution
+    ///
+    /// The system AirDrop UI handles all device discovery and selection internally.
+    private func listAvailableDevices() {
+        consoleIO.writeMessage("⚠️  API Limitation Notice")
+        consoleIO.writeMessage("")
+        consoleIO.writeMessage("Apple's NSSharingService does not provide APIs to list AirDrop recipients.")
+        consoleIO.writeMessage("AirDrop device discovery happens internally within the system UI picker.")
+        consoleIO.writeMessage("")
+        consoleIO.writeMessage("What we investigated:")
+        consoleIO.writeMessage("  • NetServiceBrowser - Only finds AirPlay devices, not AirDrop")
+        consoleIO.writeMessage("  • Network.framework - No AWDL peer enumeration API available")
+        consoleIO.writeMessage("  • MultipeerConnectivity - Requires custom app on both devices")
+        consoleIO.writeMessage("")
+        consoleIO.writeMessage("To use AirDrop, run:")
+        consoleIO.writeMessage("  airdrop <file>")
+        consoleIO.writeMessage("")
+        consoleIO.writeMessage("This will open the system picker showing all available devices.")
     }
 }
